@@ -15,20 +15,24 @@ A modular, portable Python application to download audio from YouTube and merge 
 1. Clone this repository:
    ```bash
    git clone [https://github.com/Renato-M-Silva/SimpleMusicEditor.git](https://github.com/Renato-M-Silva/SimpleMusicEditor.git)
-   cd SimpleMusicEditor```
+   cd SimpleMusicEditor
+   ```
 
 2. Install dependencies:
 
    ```bash
-    pip install -r requirements.txt```
+   pip install -r requirements.txt
+   ```
 
-3. Important: Place ffmpeg.exe and ffprobe.exe inside a folder named ffmpeg at the root of the project. (These files are excluded from the repository due to size limits).
+3. Important:  
+Place ffmpeg.exe and ffprobe.exe inside a folder named ffmpeg at the root of the project. (These files are excluded from the repository due to size limits).
 
 ## How to Run
 Run the main menu:
 
    ```bash
-   python SME.py```
+   python SME.py
+   ```
 
 ## Project Structure
 
@@ -43,5 +47,5 @@ Run the main menu:
 
 ---
 
-
-Note to self: To run this project, ensure ffmpeg.exe and ffprobe.exe are placed inside the ffmpeg/ folder. They are excluded from the repository due to size limits.
+> [!NOTE]
+> Note to self: To run this project, ensure ffmpeg.exe and ffprobe.exe are placed inside the ffmpeg/ folder. They are excluded from the repository due to size limits.
