@@ -20,3 +20,6 @@ Thumbs.db
 # Configurações do editor
 .vscode/
 .idea/
+
+# Ignore the FFmpeg binaries
+ffmpeg/*.exe
