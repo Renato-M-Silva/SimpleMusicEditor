@@ -46,15 +46,17 @@ class MyLogger:
         self.text_widget.see(tk.END)
         self.text_widget.update_idletasks()
 
-def download_audio_logic(url, output_path, text_widget):
-    """Executes the download logic."""
+def download_audio_logic(url, output_path, text_widget, parent_win):
+    """Executes the download logic with parent window reference for dialogs."""
     my_logger = MyLogger(text_widget)
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    ffmpeg_path = os.path.join(base_path, "ffmpeg")
+
 
     # Define the path to the 'ffmpeg' folder inside your project
     base_path = os.path.dirname(os.path.abspath(__file__))
     ffmpeg_path = os.path.join(base_path, "ffmpeg")
 
-    # Ensure the ffmpeg path is correctly set in yt-dlp options
     ydl_opts = {
         'format': 'bestaudio/best',
         'cookiefile': 'youtubecookies.txt',
@@ -71,15 +73,16 @@ def download_audio_logic(url, output_path, text_widget):
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
-        messagebox.showinfo("Success", "Audio downloaded successfully!")
+        # Use parent_win here for the messagebox
+        messagebox.showinfo("Success", "Audio downloaded successfully!", parent=parent_win)
     except Exception as e:
-        messagebox.showerror("Error", f"Failed to download audio: {e}")
+        messagebox.showerror("Error", f"Failed to download audio: {e}", parent=parent_win)
 
 # --- GUI Component ---
 
-def run_downloader():
-    """Launches the downloader window."""
-    download_win = tk.Toplevel()
+def run_downloader(parent):
+    """Launches the downloader window as a child of parent."""
+    download_win = parent
     download_win.title("YouTube to MP3")
     download_win.geometry("600x400")
 
@@ -89,9 +92,10 @@ def run_downloader():
 
     def start_process():
         url = url_entry.get()
-        path = filedialog.askdirectory()
+        # PASS 'parent=download_win' here to keep focus!
+        path = filedialog.askdirectory(parent=download_win)
         if url and path:
-            Thread(target=download_audio_logic, args=(url, path, progress_text), daemon=True).start()
+            Thread(target=download_audio_logic, args=(url, path, progress_text, download_win), daemon=True).start()
 
     tk.Button(download_win, text="Download", command=start_process).pack(pady=10)
     progress_text = scrolledtext.ScrolledText(download_win, width=70, height=15)

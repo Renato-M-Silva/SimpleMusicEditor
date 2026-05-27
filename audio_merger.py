@@ -47,9 +47,9 @@ def merge_tracks_logic(path1, path2, start1, end1, start2, end2, output_path, fa
     except Exception as e:
         messagebox.showerror("Error", f"An error occurred: {e}")
 
-def run_merger():
+def run_merger(parent): # Accept parent window
     """Launches the merger window."""
-    merger_win = tk.Toplevel()
+    merger_win = parent # Make it a child of the main menu
     merger_win.title("Audio Merger")
     merger_win.geometry("400x450")
 
@@ -57,13 +57,17 @@ def run_merger():
     tk.Label(merger_win, text="Track 1 Path:").pack()
     entry_path1 = tk.Entry(merger_win, width=50)
     entry_path1.pack()
-    tk.Button(merger_win, text="Browse", command=lambda: entry_path1.insert(0, filedialog.askopenfilename())).pack()
+
+    # PASS 'parent=merger_win' here! This ensures the file dialog is modal to the merger window, preventing it from being hidden behind other windows.
+    tk.Button(merger_win, text="Browse", command=lambda: entry_path1.insert(0, filedialog.askopenfilename(parent=merger_win))).pack()
 
     # Inputs for Track 2
     tk.Label(merger_win, text="Track 2 Path:").pack()
     entry_path2 = tk.Entry(merger_win, width=50)
     entry_path2.pack()
-    tk.Button(merger_win, text="Browse", command=lambda: entry_path2.insert(0, filedialog.askopenfilename())).pack()
+
+    # PASS 'parent=merger_win' here!
+    tk.Button(merger_win, text="Browse", command=lambda: entry_path2.insert(0, filedialog.askopenfilename(parent=merger_win))).pack()
 
     # Settings
     tk.Label(merger_win, text="Fade Duration (ms):").pack()
@@ -72,7 +76,8 @@ def run_merger():
     entry_fade.pack()
 
     def process():
-        output = filedialog.asksaveasfilename(defaultextension=".mp3")
+        # PASS 'parent=merger_win' here too!
+        output = filedialog.asksaveasfilename(parent=merger_win, defaultextension=".mp3")
         if output:
             merge_tracks_logic(
                 entry_path1.get(), entry_path2.get(), 
