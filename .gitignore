@@ -1,0 +1,22 @@
+# Pastas de ambiente virtual
+venv/
+env/
+.env
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+
+# Arquivos temporários criados pelos scripts
+*.mp3
+!combinar_musicas.py
+!Youtube2Mp3.py
+# (Se seus scripts criam logs ou arquivos temporários, adicione aqui)
+
+# Arquivos do sistema operacional
+.DS_Store
+Thumbs.db
+
+# Configurações do editor
+.vscode/
+.idea/
