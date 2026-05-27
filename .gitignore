@@ -12,6 +12,7 @@ __pycache__/
 !combinar_musicas.py
 !Youtube2Mp3.py
 # (Se seus scripts criam logs ou arquivos temporários, adicione aqui)
+youtubecookies.txt
 
 # Arquivos do sistema operacional
 .DS_Store
