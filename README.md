@@ -6,6 +6,9 @@ A modular, portable Python application to download audio from YouTube and merge 
 - **Centralized Menu:** Intuitive navigation between tools within a single window.
 - **YouTube Downloader:** Downloads and converts YouTube videos to MP3.
 - **Audio Merger:** Combines two audio tracks with configurable cross-fades.
+- - Precise start/end time configuration.
+- - Real-time segment and fade preview.
+- - Custom Transition Modes: Choose between Crossfade, Fade Out/In, or Transition Sound Injection.
 - **Portable Architecture:** Designed to use local FFmpeg binaries from the /ffmpeg directory, ensuring consistent behavior across different environments.
 
 ## Project Structure
@@ -51,6 +54,13 @@ Run the main menu:
    python SME.py
    ```
   
+
+## Transition Modes Explained
+- **Crossfade:** Overlaps the end of Track 1 with the start of Track 2 for a seamless musical blend.
+
+- **Fade Out/In:** Gradually mutes Track 1 and then introduces Track 2, ensuring no overlap.
+
+- **Transition Sound:** Allows you to insert a custom audio file (e.g., sound effects, transitions) between the two main tracks.
 
 ---
   
