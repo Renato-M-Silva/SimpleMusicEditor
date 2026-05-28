@@ -5,21 +5,6 @@ import os
 import sounddevice as sd
 import numpy as np
 
-# --- Robust Portable FFmpeg Configuration ---
-base_path = os.path.dirname(os.path.abspath(__file__))
-ffmpeg_path = os.path.join(base_path, "ffmpeg")
-
-# Add the ffmpeg folder to the system PATH for this process
-os.environ["PATH"] += os.pathsep + ffmpeg_path
-
-# Explicitly set the path for AudioSegment
-AudioSegment.converter = os.path.join(ffmpeg_path, "ffmpeg.exe")
-AudioSegment.ffprobe = os.path.join(ffmpeg_path, "ffprobe.exe")
-
-# Verify the binaries actually exist
-if not os.path.exists(AudioSegment.converter):
-    print(f"CRITICAL: ffmpeg.exe not found at {AudioSegment.converter}")
-
 class AudioPlayer:
     """Simple audio player using sounddevice for low-latency playback"""
     def __init__(self):
@@ -51,8 +36,6 @@ def run_merger(parent):
     """Sets up the audio merger GUI and functionality."""
     # Set up the merger window
     merger_win = parent
-    merger_win.title("Audio Merger")
-    merger_win.geometry("600x700")
 
     player = AudioPlayer()
 

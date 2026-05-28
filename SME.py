@@ -1,32 +1,64 @@
 import tkinter as tk
-import Youtube2Mp3
-import audio_merger
+import os
 import warnings
 
+# --- Robust Portable FFmpeg Configuration ---
+base_path = os.path.dirname(os.path.abspath(__file__))
+ffmpeg_path = os.path.join(base_path, "ffmpeg")
+# Add the ffmpeg folder to the system PATH for this process
+os.environ["PATH"] += os.pathsep + ffmpeg_path
+
+# importing pydub after setting the PATH to ensure it can find ffmpeg
+from pydub import AudioSegment
+AudioSegment.converter = os.path.join(ffmpeg_path, "ffmpeg.exe")
+AudioSegment.ffprobe = os.path.join(ffmpeg_path, "ffprobe.exe")
+
+# Verify the binaries actually exist
+if not os.path.exists(AudioSegment.converter):
+    print(f"CRITICAL: ffmpeg.exe not found at {AudioSegment.converter}")
+if not os.path.exists(AudioSegment.ffprobe):
+    print(f"CRITICAL: ffprobe.exe not found at {AudioSegment.ffprobe}")
+
+import Youtube2Mp3
+import audio_merger
+
+# Suppress specific warnings from pydub/ffmpeg
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-def open_downloader():
-    # Toplevel creates a child window instead of a new app instance
-    win = tk.Toplevel(root)
-    Youtube2Mp3.run_downloader(win)
+class App(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("SME - Simple Music Editor")
+        self.geometry("600x600")
+        self.container = tk.Frame(self)
+        self.container.pack(fill="both", expand=True)
+        self.show_menu()
 
-def open_merger():
-    # Toplevel creates a child window instead of a new app instance
-    win = tk.Toplevel(root)
-    audio_merger.run_merger(win)
+    def clear_container(self):
+        # Remove everything in the container
+        for widget in self.container.winfo_children():
+            widget.destroy()
 
-def main():
-    global root
-    root = tk.Tk()
-    root.title("SME - Simple Music Editor")
-    root.geometry("300x200")
+    def show_menu(self):
+        self.clear_container()
+        tk.Label(self.container, text="Main Menu", font=("Arial", 14)).pack(pady=20)
+        tk.Button(self.container, text="YouTube Downloader", command=self.open_downloader).pack(pady=5)
+        tk.Button(self.container, text="Audio Merger", command=self.open_merger).pack(pady=5)
+        tk.Button(self.container, text="Exit", command=self.quit).pack(pady=5)
 
-    tk.Label(root, text="Main Menu", font=("Arial", 14)).pack(pady=10)
-    
-    tk.Button(root, text="YouTube Downloader", command=open_downloader).pack(pady=5)
-    tk.Button(root, text="Audio Merger", command=open_merger).pack(pady=5)
-    
-    root.mainloop()
+    def open_downloader(self):
+        # Back button to return to the main menu
+        tk.Button(self.container, text="← Back to Menu", command=self.show_menu).pack(anchor="nw", padx=10, pady=5)
+        # Pass the container to run_downloader to draw within it
+        Youtube2Mp3.run_downloader(self.container)
+
+    def open_merger(self):
+        self.clear_container()
+        # Back button to return to the main menu
+        tk.Button(self.container, text="← Back to Menu", command=self.show_menu).pack(anchor="nw", padx=10, pady=5)
+        # Pass the container to audio_merger to draw within it
+        audio_merger.run_merger(self.container)
 
 if __name__ == "__main__":
-    main()
+    app = App()
+    app.mainloop()

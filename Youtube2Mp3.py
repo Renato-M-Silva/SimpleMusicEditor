@@ -83,8 +83,6 @@ def download_audio_logic(url, output_path, text_widget, parent_win):
 def run_downloader(parent):
     """Launches the downloader window as a child of parent."""
     download_win = parent
-    download_win.title("YouTube to MP3")
-    download_win.geometry("600x400")
 
     tk.Label(download_win, text="YouTube URL:").pack(pady=5)
     url_entry = tk.Entry(download_win, width=60)
