@@ -109,7 +109,7 @@ def run_merger(parent):
         row1.pack(fill="x")
         entry = tk.Entry(row1, width=50)
         entry.pack(side=tk.LEFT, expand=True, fill="x")
-        btn_browse = tk.Button(row1, text="Browse", command=lambda: setup_browser(merger_win,entry, btn_play, btn_stop, btn_seg, btn_fade, entry_start, entry_end, label_info, entry_fade))
+        btn_browse = tk.Button(row1, text="Browse", command=lambda: setup_browser(merger_win,entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info))
         btn_browse.pack(side=tk.LEFT)
 
         # Row 2: Info (Size/Duration)
@@ -121,8 +121,7 @@ def run_merger(parent):
         row3.pack(fill="x")
         btn_play = tk.Button(row3, text="▶", state="disabled")
         btn_seg = tk.Button(row3, text="▶ Segment", state="disabled")
-        btn_fade = tk.Button(row3, text="▶ Fade", state="disabled")
-        btn_stop = tk.Button(row3, text="■", state="disabled", command=lambda: on_stop_click(btn_play, btn_stop, btn_seg, btn_fade))
+        btn_stop = tk.Button(row3, text="■", state="disabled", command=lambda: on_stop_click(btn_play, btn_stop, btn_seg))
         
 
         tk.Label(row3, text="Start(s):").pack(side=tk.LEFT)
@@ -133,19 +132,14 @@ def run_merger(parent):
         entry_end = tk.Entry(row3, width=5)
         entry_end.pack(side=tk.LEFT)
         
-        tk.Label(row3, text="Fade(ms):").pack(side=tk.LEFT)
-        entry_fade = tk.Entry(row3, width=5)
-        entry_fade.insert(0, "500") # default fade duration  
-        entry_fade.pack(side=tk.LEFT)
 
         btn_play.pack(side=tk.LEFT)
         btn_seg.pack(side=tk.LEFT)
-        btn_fade.pack(side=tk.LEFT)
         btn_stop.pack(side=tk.LEFT)
         
-        return entry, btn_browse, btn_play, btn_stop, entry_start, entry_end, label_info, entry_fade
+        return entry, btn_browse, btn_play, btn_stop, entry_start, entry_end, label_info
 
-    def setup_browser(parent_win, entry, btn_play, btn_stop, btn_seg, btn_fade, entry_start, entry_end, label_info, entry_fade):
+    def setup_browser(parent_win, entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info):
         """Handles the file browsing and loading of audio info."""
         # Open file dialog and load audio info
         file = filedialog.askopenfilename(parent=parent_win, filetypes=[("Audio files", "*.mp3 *.wav"), ("All files", "*.*")], title="Select an audio file")
@@ -154,40 +148,33 @@ def run_merger(parent):
             entry.insert(0, file)
             audio = load_track_info(file, label_info)
             if audio:
-                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg, btn_fade ))
+                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg ))
                 # Play Full
-                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg, btn_fade))
+                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg))
                 # Play Segment
-                btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg, btn_fade ))
-                # Play Fade
-                btn_fade.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, entry_fade, True), btn_play, btn_stop, btn_seg, btn_fade ))
+                btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg ))
 
                 btn_stop.config(state="normal")
 
     # Create sections
-    e1, b1, p1, s1, st1, en1, inf1, f1 = create_track_section(merger_win, "Track 1")
-    e2, b2, p2, s2, st2, en2, inf2, f2  = create_track_section(merger_win, "Track 2")
-    fade = f2  # Use fade entry from second track for crossfade duration
+    e1, b1, p1, s1, st1, en1, inf1 = create_track_section(merger_win, "Track 1")
+    e2, b2, p2, s2, st2, en2, inf2 = create_track_section(merger_win, "Track 2")
+    
 
-    def merge_tracks(crossfade_ms=500):
+    def merge_tracks(entry_fade_out=None, entry_fade_in=None):
         """Merges the selected audio tracks based on user-defined start/end times."""
         # Merge the selected audio tracks
         nonlocal global_audio_merged
         tipo = combo_transition.get()
 
         try:
-            crossfade_ms = int(crossfade_ms)
-        except:
-            crossfade_ms = 0
-
-        try:
             audio1 = AudioSegment.from_file(e1.get())
             audio2 = AudioSegment.from_file(e2.get())
             
             # Get start/end times
-            start1 = float(st1.get()) * 1000
+            start1 = float(st1.get()) * 1000 if st1.get() else 0
             end1 = float(en1.get()) * 1000 if en1.get() else len(audio1)
-            start2 = float(st2.get()) * 1000
+            start2 = float(st2.get()) * 1000 if st2.get() else 0
             end2 = float(en2.get()) * 1000 if en2.get() else len(audio2)
             
             # Extract segments
@@ -196,12 +183,12 @@ def run_merger(parent):
             
             # Merge (concatenate)
             if tipo == "Crossfade":
-                global_audio_merged = seg1.append(seg2, crossfade=crossfade_ms)
+                global_audio_merged = seg1.append(seg2, crossfade=int(entry_fade_in.get()))
                 
             elif tipo == "Fade Out/In":
-                # Fade out na 1, fade in na 2, sem sobreposição
-                seg1_fade = seg1.fade_out(crossfade_ms)
-                seg2_fade = seg2.fade_in(crossfade_ms)
+                # Fade out seg1 and fade in seg2, then concatenate without overlap
+                seg1_fade = seg1.fade_out(int(entry_fade_out.get()))
+                seg2_fade = seg2.fade_in(int(entry_fade_in.get()))
                 global_audio_merged = seg1_fade + seg2_fade
                 
             elif tipo == "Insert Sound (Transition)":
@@ -209,8 +196,16 @@ def run_merger(parent):
                 sound_transition_path = filedialog.askopenfilename(title="Select the transition sound")
                 if sound_transition_path:
                     sound_transition = AudioSegment.from_file(sound_transition_path)
+                    # Apply fade to the transition sound if specified
+                    if entry_fade_in.get() and entry_fade_out.get():
+                        sound_transition = sound_transition.fade_in(int(entry_fade_in.get())).fade_out(int(entry_fade_out.get())) 
+                        seg1_fade = seg1.fade_out(int(entry_fade_out.get()))
+                        seg2_fade = seg2.fade_in(int(entry_fade_in.get()))
+                    else:
+                        seg1_fade = seg1
+                        seg2_fade = seg2
                     # Concatenate: End of seg1 + Transition Sound + Start of seg2
-                    global_audio_merged = seg1 + sound_transition + seg2
+                    global_audio_merged = seg1_fade + sound_transition + seg2_fade
             btn_play_merged.config(state="normal")
             btn_save.config(state="normal")
             
@@ -218,20 +213,41 @@ def run_merger(parent):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to merge tracks: {e}", parent=merger_win)
 
-    # Row 2: Info (Size/Duration)
-    label_info = tk.Label(text="Merger will happen using fade from second track", fg="black")
-    label_info.pack(fill="x", pady=5)
-    # Set up browse buttons
-    tk.Button(merger_win, text="Merge Tracks", command=lambda: merge_tracks(crossfade_ms=int(fade.get()))).pack(pady=10)
-    btn_play_merged = tk.Button(merger_win, text="▶ Play Merged", state="disabled", command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged))
-    btn_play_merged.pack(pady=5)
-    btn_stop_merged = tk.Button(merger_win, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged))
-    btn_stop_merged.pack(pady=5)
+    sectionm = tk.LabelFrame(merger_win, text="Fading Settings", padx=10, pady=10)
+    sectionm.pack(fill="x", padx=10, pady=5)
 
-    tk.Label(merger_win, text="Tipo de Transição:").pack(pady=5)
-    combo_transition = ttk.Combobox(merger_win, values=["Crossfade", "Fade Out/In", "Insert Sound (Transition)"], state="readonly")
-    combo_transition.current(0) # Seleciona Crossfade por padrão
+    # Row 1: Fade settings
+    rowm1 = tk.Frame(sectionm)
+    rowm1.pack(fill="x")
+
+    tk.Label(rowm1, text="Fade Out(ms):").pack(side=tk.LEFT)
+    entry_fade_out = tk.Entry(rowm1, width=5)
+    entry_fade_out.insert(0, "2000") # default fade duration  
+    entry_fade_out.pack(side=tk.LEFT)
+    tk.Label(rowm1, text="Fade In(ms):").pack(side=tk.LEFT)
+    entry_fade_in = tk.Entry(rowm1, width=5)
+    entry_fade_in.insert(0, "2000") # default fade duration  
+    entry_fade_in.pack(side=tk.LEFT)
+
+    # Row 2: Info
+    label_info = tk.Label(sectionm, text="Crossfade will happen using fade from 'Fade In'", fg="red")
+    label_info.pack(fill="x", pady=5)
+
+    tk.Label(sectionm, text="Transition Type:").pack(pady=5)
+    combo_transition = ttk.Combobox(sectionm, values=["Crossfade", "Fade Out/In", "Insert Sound (Transition)"], state="readonly")
+    combo_transition.current(0) 
     combo_transition.pack(pady=5)
+
+    # Row 4: Controls
+    # Set up browse buttons
+    rowm4 = tk.Frame(sectionm)
+    rowm4.pack(fill="x")
+    tk.Button(rowm4, text="Merge Tracks", command=lambda: merge_tracks(entry_fade_out=entry_fade_out, entry_fade_in=entry_fade_in)).pack(pady=10)
+
+    btn_play_merged = tk.Button(rowm4, text="▶ Play Merged", state="disabled", command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged))
+    btn_play_merged.pack(side=tk.LEFT)
+    btn_stop_merged = tk.Button(rowm4, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged))
+    btn_stop_merged.pack(side=tk.LEFT)
 
     def save_merged(parent_win):
         """Saves the merged audio to a user-selected file location."""
