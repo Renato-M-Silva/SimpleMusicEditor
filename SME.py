@@ -19,8 +19,7 @@ if not os.path.exists(AudioSegment.converter):
 if not os.path.exists(AudioSegment.ffprobe):
     print(f"CRITICAL: ffprobe.exe not found at {AudioSegment.ffprobe}")
 
-import Youtube2Mp3
-import audio_merger
+from modules import downloader, merger
 
 # Suppress specific warnings from pydub/ffmpeg
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -50,14 +49,14 @@ class App(tk.Tk):
         # Back button to return to the main menu
         tk.Button(self.container, text="← Back to Menu", command=self.show_menu).pack(anchor="nw", padx=10, pady=5)
         # Pass the container to run_downloader to draw within it
-        Youtube2Mp3.run_downloader(self.container)
+        downloader.run_downloader(self.container)
 
     def open_merger(self):
         self.clear_container()
         # Back button to return to the main menu
         tk.Button(self.container, text="← Back to Menu", command=self.show_menu).pack(anchor="nw", padx=10, pady=5)
         # Pass the container to audio_merger to draw within it
-        audio_merger.run_merger(self.container)
+        merger.run_merger(self.container)
 
 if __name__ == "__main__":
     app = App()
