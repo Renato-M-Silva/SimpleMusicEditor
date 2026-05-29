@@ -244,10 +244,24 @@ def run_merger(parent):
     rowm4.pack(fill="x")
     tk.Button(rowm4, text="Merge Tracks", command=lambda: merge_tracks(entry_fade_out=entry_fade_out, entry_fade_in=entry_fade_in)).pack(pady=10)
 
-    btn_play_merged = tk.Button(rowm4, text="▶ Play Merged", state="disabled", command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged))
+    btn_play_merged = tk.Button(rowm4, text="▶ Play Merged", state="disabled", command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged))
     btn_play_merged.pack(side=tk.LEFT)
-    btn_stop_merged = tk.Button(rowm4, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged))
+    btn_stop_merged = tk.Button(rowm4, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged, btn_seg_merged))
     btn_stop_merged.pack(side=tk.LEFT)
+
+    # Segment preview controls for merged audio
+    tk.Label(rowm4, text="Segment Start(ms):").pack(side=tk.LEFT)
+    entry_seg_start = tk.Entry(rowm4, width=5)
+    entry_seg_start.insert(0, "0")  
+    entry_seg_start.pack(side=tk.LEFT)
+
+    tk.Label(rowm4, text="Segment End(ms):").pack(side=tk.LEFT)
+    entry_seg_end = tk.Entry(rowm4, width=5)
+    entry_seg_end.insert(0, "0")  
+    entry_seg_end.pack(side=tk.LEFT)
+
+    btn_seg_merged = tk.Button(rowm4, text="▶ Play Merged Segment", state="disabled", command=lambda: on_play_click(get_segment(global_audio_merged, entry_seg_start, entry_seg_end), btn_seg_merged, btn_stop_merged))
+    btn_seg_merged.pack(side=tk.LEFT)  
 
     def save_merged(parent_win):
         """Saves the merged audio to a user-selected file location."""
