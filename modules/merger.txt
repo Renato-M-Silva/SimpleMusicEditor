@@ -270,8 +270,7 @@ def run_merger(parent):
             save_path = filedialog.asksaveasfilename(parent=parent_win, defaultextension=".mp3", filetypes=[("MP3 files", "*.mp3"), ("All files", "*.*")])
             if save_path:
                 try:
-                    # force CBR and stereo + 44.1 kHz
-                    global_audio_merged.export( save_path, format="mp3", bitrate="192k", parameters=["-ac", "2", "-ar", "44100"] )
+                    global_audio_merged.export(save_path, format="mp3")
                     messagebox.showinfo("Saved", f"Merged audio saved to {save_path}", parent=parent_win)
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to save file: {e}", parent=parent_win)
