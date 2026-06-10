@@ -41,6 +41,7 @@ def run_merger(parent):
     player = AudioPlayer()
     
     def get_segment(audio_segment, start_entry, end_entry, fade_entry=None, apply_fade=False):
+        """Extracts a segment from the audio based on start/end times and applies fade if specified."""
         start_ms = float(start_entry.get() or 0) * 1000
         end_ms = float(end_entry.get()) * 1000 if end_entry.get() else len(audio_segment)
         
@@ -52,9 +53,12 @@ def run_merger(parent):
             
         return segment
 
-    def on_play_click(audio, btn_play,btn_stop, btn_seg=None, btn_fade=None):
+    def on_play_click(audio, btn_play,btn_stop, btn_seg=None, btn_fade=None, slider=None):
         """Plays the given audio segment and manages button states."""
         player.play_segment(audio)
+        if slider:
+            monitor_slider(slider, audio)
+
         btn_play.config(state="disabled") # Disable Play
         btn_stop.config(state="normal")   # Enable Stop
 
@@ -84,6 +88,21 @@ def run_merger(parent):
             # Still playing, check again in 100ms
             merger_win.after(100, lambda: monitor_playback(btn_play, btn_stop, btn_seg, btn_fade))
 
+    def monitor_slider(slider, audio_segment):
+        """Updates the slider position while audio is playing."""
+        if player.is_playing():
+            # sounddevice stream time is in seconds → convert to ms
+            pos_ms = int(sd.get_stream().time * 1000)
+            slider.set(pos_ms)
+            merger_win.after(50, lambda: monitor_slider(slider, audio_segment))
+
+    def on_slider_release(event, audio_segment, slider, btn_play, btn_stop, btn_seg=None):
+        """Handles user dragging the slider to a new playback position."""
+        new_pos = slider.get()
+        new_audio = audio_segment[new_pos:]
+        on_play_click(new_audio, btn_play, btn_stop, btn_seg)
+
+
     global_audio_merged = None  # This will hold the merged audio object
 
     def load_track_info(path, label_info):
@@ -109,7 +128,7 @@ def run_merger(parent):
         row1.pack(fill="x")
         entry = tk.Entry(row1, width=50)
         entry.pack(side=tk.LEFT, expand=True, fill="x")
-        btn_browse = tk.Button(row1, text="Browse", command=lambda: setup_browser(merger_win,entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info))
+        btn_browse = tk.Button(row1, text="Browse", command=lambda: setup_browser(merger_win,entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info, slider))
         btn_browse.pack(side=tk.LEFT)
 
         # Row 2: Info (Size/Duration)
@@ -136,10 +155,21 @@ def run_merger(parent):
         btn_play.pack(side=tk.LEFT)
         btn_seg.pack(side=tk.LEFT)
         btn_stop.pack(side=tk.LEFT)
-        
-        return entry, btn_browse, btn_play, btn_stop, entry_start, entry_end, label_info
 
-    def setup_browser(parent_win, entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info):
+        # Row 4: Position slider
+        slider = tk.Scale(
+            section,
+            from_=0,
+            to=1000,  # temporary value, updated when audio loads
+            orient="horizontal",
+            length=400,
+            label="Position (ms)"
+        )
+        slider.pack(fill="x", pady=5)
+        
+        return entry, btn_browse, btn_play, btn_stop, entry_start, entry_end, label_info, slider
+
+    def setup_browser(parent_win, entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info, slider):
         """Handles the file browsing and loading of audio info."""
         # Open file dialog and load audio info
         file = filedialog.askopenfilename(parent=parent_win, filetypes=[("Audio files", "*.mp3 *.wav"), ("All files", "*.*")], title="Select an audio file")
@@ -147,18 +177,27 @@ def run_merger(parent):
             entry.delete(0, tk.END)
             entry.insert(0, file)
             audio = load_track_info(file, label_info)
+            
             if audio:
-                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg ))
-                # Play Full
-                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg))
-                # Play Segment
-                btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg ))
+                # Update slider range based on audio duration
+                slider.config(to=len(audio))
+                slider.set(0)
+                
+                # Bind slider release event
+                slider.bind("<ButtonRelease-1>", lambda e: on_slider_release(e, audio, slider, btn_play, btn_stop, btn_seg))
 
+                # Play Full Track
+                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg))
+                # Play Segment with optional fade
+                btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg ))
+                # Stop 
                 btn_stop.config(state="normal")
+                
+
 
     # Create sections
-    e1, b1, p1, s1, st1, en1, inf1 = create_track_section(merger_win, "Track 1")
-    e2, b2, p2, s2, st2, en2, inf2 = create_track_section(merger_win, "Track 2")
+    e1, b1, p1, s1, st1, en1, inf1, slider1= create_track_section(merger_win, "Track 1")
+    e2, b2, p2, s2, st2, en2, inf2, slider2 = create_track_section(merger_win, "Track 2")
     
 
     def merge_tracks(entry_fade_out=None, entry_fade_in=None):
@@ -210,6 +249,15 @@ def run_merger(parent):
                         seg2_fade = seg2
                     # Concatenate: End of seg1 + Transition Sound + Start of seg2
                     global_audio_merged = seg1_fade + sound_transition + seg2_fade
+            
+            # Update merged slider range
+            merged_slider.config(to=len(global_audio_merged))
+            merged_slider.set(0)
+
+            # Bind slider release event for seeking
+            merged_slider.bind("<ButtonRelease-1>", lambda e: on_slider_release(e, global_audio_merged, merged_slider, btn_play_merged, btn_stop_merged, btn_seg_merged))
+
+            # Enable play and save buttons for merged audio
             btn_play_merged.config(state="normal")
             btn_save.config(state="normal")
             
@@ -237,6 +285,7 @@ def run_merger(parent):
     label_info = tk.Label(sectionm, text="Crossfade will happen using fade from 'Fade In'", fg="red")
     label_info.pack(fill="x", pady=5)
 
+    # Row 3: Transition type
     tk.Label(sectionm, text="Transition Type:").pack(pady=5)
     combo_transition = ttk.Combobox(sectionm, values=["Crossfade", "Fade Out/In", "Insert Sound (Transition)"], state="readonly")
     combo_transition.current(0) 
@@ -248,7 +297,15 @@ def run_merger(parent):
     rowm4.pack(fill="x")
     tk.Button(rowm4, text="Merge Tracks", command=lambda: merge_tracks(entry_fade_out=entry_fade_out, entry_fade_in=entry_fade_in)).pack(pady=10)
 
-    btn_play_merged = tk.Button(rowm4, text="▶ Play Merged", state="disabled", command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged))
+    btn_play_merged = tk.Button(
+        rowm4,
+        text="▶ Play Merged",
+        state="disabled",
+        command=lambda: (
+            on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged),
+            monitor_slider(merged_slider, global_audio_merged)
+        )
+    )
     btn_play_merged.pack(side=tk.LEFT)
     btn_stop_merged = tk.Button(rowm4, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged, btn_seg_merged))
     btn_stop_merged.pack(side=tk.LEFT)
@@ -266,6 +323,10 @@ def run_merger(parent):
 
     btn_seg_merged = tk.Button(rowm4, text="▶ Play Merged Segment", state="disabled", command=lambda: on_play_click(get_segment(global_audio_merged, entry_seg_start, entry_seg_end), btn_seg_merged, btn_stop_merged))
     btn_seg_merged.pack(side=tk.LEFT)  
+
+    # Slider for merged audio position
+    merged_slider = tk.Scale(sectionm, from_=0, to=1000, orient="horizontal", length=500, label="Merged Audio Position (ms)")
+    merged_slider.pack(fill="x", pady=5)
 
     def save_merged(parent_win):
         """Saves the merged audio to a user-selected file location."""
