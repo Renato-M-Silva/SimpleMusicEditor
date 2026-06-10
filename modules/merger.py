@@ -170,6 +170,10 @@ def run_merger(parent):
         try:
             audio1 = AudioSegment.from_file(e1.get())
             audio2 = AudioSegment.from_file(e2.get())
+            # Ensure both audio segments have the same frame rate and channels for proper merging
+            audio1 = audio1.set_frame_rate(44100).set_channels(2)
+            audio2 = audio2.set_frame_rate(44100).set_channels(2)
+
             
             # Get start/end times
             start1 = float(st1.get()) * 1000 if st1.get() else 0
@@ -268,6 +272,8 @@ def run_merger(parent):
         # Save the merged audio to a file
         if global_audio_merged:
             save_path = filedialog.asksaveasfilename(parent=parent_win, defaultextension=".mp3", filetypes=[("MP3 files", "*.mp3"), ("All files", "*.*")])
+            # Normalize the merged audio to prevent clipping
+            global_audio_merged = global_audio_merged.normalize()
             if save_path:
                 try:
                     # force CBR and stereo + 44.1 kHz
