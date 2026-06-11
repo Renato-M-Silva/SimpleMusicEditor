@@ -1,3 +1,4 @@
+from email.mime import audio
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
@@ -10,6 +11,8 @@ class AudioPlayer:
     """Simple audio player using sounddevice for low-latency playback"""
     def __init__(self):
         self.stream = None
+        self.samples = None
+        self.position = 0
 
     def play_segment(self, audio_segment):
         """Plays a Pydub AudioSegment using sounddevice."""
@@ -24,40 +27,113 @@ class AudioPlayer:
         # Normalize to float32 for sounddevice
         samples = samples.astype(np.float32) / (1 << (8 * audio_segment.sample_width - 1))
         
-        # Play the array directly from RAM
-        sd.play(samples, samplerate=audio_segment.frame_rate)
+        # removed sd.play() in favor of using OutputStream for better control and to avoid issues with multiple play calls
+        ## Play the array directly from RAM
+        # sd.play(samples, samplerate=audio_segment.frame_rate)
+
+        # Stop previous stream if any
+        if self.stream:
+            self.stream.stop()
+            self.stream.close()
+
+        # Store samples for callback
+        self.samples = samples
+        self.position = 0
+        self.samplerate = audio_segment.frame_rate
+        
+        # Callback function
+        def callback(outdata, frames, time, status):
+            # Check if we have samples to play
+            if self.samples is None:
+                outdata[:] = 0
+                raise sd.CallbackStop()
+            
+            # Calculate how many samples to output
+            end = self.position + frames
+            chunk = self.samples[self.position:end]
+
+            # If we've reached the end of the samples, stop playback
+            if len(chunk) == 0:
+                outdata[:] = 0
+                raise sd.CallbackStop()
+            
+            # If we have less samples than requested, pad with zeros
+            elif len(chunk) < frames:
+                # End of audio
+                outdata[:len(chunk)] = chunk
+                outdata[len(chunk):] = 0
+                self.position = end
+                raise sd.CallbackStop()
+            else:
+                outdata[:] = chunk
+                self.position = end
+
+        # Create non-blocking stream
+        self.stream = sd.OutputStream(
+            samplerate=audio_segment.frame_rate,
+            channels=audio_segment.channels,
+            dtype='float32',
+            callback=callback,
+            blocksize=1024  # smaller blocksize for lower latency
+        )
+
+        self.stream.start()
 
     def is_playing(self):
-        return sd.get_stream().active
+        # Check if the stream is active (playing)
+        # Note: sounddevice does not provide a direct way to check if audio is still playing, but we can check if the stream is active.
+        # removed sd.get_stream().active in favor of checking self.stream to avoid issues when no stream is initialized
+        # return sd.get_stream().active
+        # We check if self.stream exists and is active to avoid errors when no stream is initialized
+        return self.stream is not None and self.stream.active
 
     def stop(self):
-        sd.stop()
+        if self.stream:
+            self.stream.stop()
+            self.stream.close()
+            self.stream = None
+            self.samples = None
+            self.position = 0
 
 def run_merger(parent):
     """Sets up the audio merger GUI and functionality."""
     # Set up the merger window
     merger_win = parent
 
+    # Two main columns
+    left_column = tk.Frame(merger_win)
+    right_column = tk.Frame(merger_win)
+
+    left_column.pack(side="left", fill="both", expand=True)
+    right_column.pack(side="right", fill="both", expand=True)
+
+
     player = AudioPlayer()
     
-    def get_segment(audio_segment, start_entry, end_entry, fade_entry=None, apply_fade=False):
-        """Extracts a segment from the audio based on start/end times and applies fade if specified."""
-        start_ms = float(start_entry.get() or 0) * 1000
-        end_ms = float(end_entry.get()) * 1000 if end_entry.get() else len(audio_segment)
-        
-        segment = audio_segment[start_ms:end_ms]
-        
-        if apply_fade:
-            fade_ms = int(fade_entry.get() or 1000)
-            segment = segment.fade_in(fade_ms).fade_out(fade_ms)
-            
-        return segment
+    # Helper function to extract segment with optional fade (not currently used, but can be used for the "Play Segment" button if we want to apply fade on the fly)
+    # def get_segment(audio_segment, start_entry, end_entry, fade_entry=None, apply_fade=False):
+    #     """Extracts a segment from the audio based on start/end times and applies fade if specified."""
+    #     start_ms = float(start_entry.get() or 0) * 1000
+    #     end_ms = float(end_entry.get()) * 1000 if end_entry.get() else len(audio_segment)
+    #    
+    #    segment = audio_segment[start_ms:end_ms]
+    #    
+    #    if apply_fade:
+    #        fade_ms = int(fade_entry.get() or 1000)
+    #        segment = segment.fade_in(fade_ms).fade_out(fade_ms)
+    #        
+    #    return segment
 
     def on_play_click(audio, btn_play,btn_stop, btn_seg=None, btn_fade=None, slider=None):
         """Plays the given audio segment and manages button states."""
-        player.play_segment(audio)
+        # If a slider is provided, start from the slider's position
+        start_ms = getattr(slider, "seek_offset", 0)
+
+        # Cut audio only when PLAY is pressed
+        audio_to_play = audio[start_ms:]
+        player.play_segment(audio_to_play)
         if slider:
-            monitor_slider(slider, audio)
+            monitor_slider(slider, audio, start_ms)  # Start monitoring slider position
 
         btn_play.config(state="disabled") # Disable Play
         btn_stop.config(state="normal")   # Enable Stop
@@ -88,19 +164,61 @@ def run_merger(parent):
             # Still playing, check again in 100ms
             merger_win.after(100, lambda: monitor_playback(btn_play, btn_stop, btn_seg, btn_fade))
 
-    def monitor_slider(slider, audio_segment):
+    def monitor_slider(slider, audio_segment, offset=0):
         """Updates the slider position while audio is playing."""
         if player.is_playing():
-            # sounddevice stream time is in seconds → convert to ms
-            pos_ms = int(sd.get_stream().time * 1000)
+            # position is in frames; convert to milliseconds
+            pos_ms = int(player.position / player.samplerate * 1000)
+
+            slider.set(offset + pos_ms)
+            merger_win.after(50, lambda: monitor_slider(slider, audio_segment, offset))  
+
+    def monitor_slider_segment(slider, audio_segment, start_ms, end_ms, btn_play=None, btn_stop=None, btn_seg=None):
+        if player.is_playing():
+            # Calculate position
+            pos_ms = start_ms + int(player.position / player.samplerate * 1000)
+
+            # Update slider
             slider.set(pos_ms)
-            merger_win.after(50, lambda: monitor_slider(slider, audio_segment))
+
+            # Stop exactly at the end
+            if pos_ms >= end_ms:
+                player.stop()
+                slider.set(end_ms)
+
+                # Reset buttons
+                on_stop_click(btn_play, btn_stop, btn_seg)
+                return
+
+            merger_win.after(50, lambda: monitor_slider_segment(slider, audio_segment, start_ms, end_ms, btn_play, btn_stop, btn_seg))
 
     def on_slider_release(event, audio_segment, slider, btn_play, btn_stop, btn_seg=None):
-        """Handles user dragging the slider to a new playback position."""
-        new_pos = slider.get()
-        new_audio = audio_segment[new_pos:]
-        on_play_click(new_audio, btn_play, btn_stop, btn_seg)
+        """Slider only selects the position. Does NOT start playback."""
+        # Save the selected position (in ms)
+        slider.seek_offset = slider.get()
+
+    def play_segment_with_slider(audio_segment, start_ms, end_ms, btn_play, btn_stop, btn_seg, slider):
+        """Play only a segment and stop exactly at the end."""
+        # Save segment boundaries
+        slider.seek_offset = start_ms
+        slider.segment_end = end_ms
+
+        # Move slider to the start
+        slider.set(start_ms)
+
+        # Cut audio only for playback
+        audio_to_play = audio_segment[start_ms:end_ms]
+
+        # Play
+        player.play_segment(audio_to_play)
+
+        # Start monitoring
+        monitor_slider_segment(slider, audio_segment, start_ms, end_ms, btn_play, btn_stop, btn_seg)
+
+        # Update buttons
+        btn_play.config(state="disabled")
+        btn_stop.config(state="normal")
+        btn_seg.config(state="disabled")
 
 
     global_audio_merged = None  # This will hold the merged audio object
@@ -187,17 +305,31 @@ def run_merger(parent):
                 slider.bind("<ButtonRelease-1>", lambda e: on_slider_release(e, audio, slider, btn_play, btn_stop, btn_seg))
 
                 # Play Full Track
-                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg))
+                btn_play.config(state="normal", command=lambda: on_play_click(audio, btn_play, btn_stop, btn_seg, None, slider))
                 # Play Segment with optional fade
-                btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg ))
+                # change to use play_segment_with_slider which will stop exactly at the end of the segment and update the slider accordingly
+                # btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg, None, slider))
+                btn_seg.config(
+                    state="normal",
+                    command=lambda: play_segment_with_slider(
+                        audio,
+                        int(float(entry_start.get() or 0) * 1000),
+                        int(float(entry_end.get() or len(audio)/1000) * 1000),
+                        btn_play,
+                        btn_stop,
+                        btn_seg,
+                        slider
+                    )
+                )
+
                 # Stop 
                 btn_stop.config(state="normal")
                 
 
 
     # Create sections
-    e1, b1, p1, s1, st1, en1, inf1, slider1= create_track_section(merger_win, "Track 1")
-    e2, b2, p2, s2, st2, en2, inf2, slider2 = create_track_section(merger_win, "Track 2")
+    e1, b1, p1, s1, st1, en1, inf1, slider1= create_track_section(left_column, "Track 1")
+    e2, b2, p2, s2, st2, en2, inf2, slider2 = create_track_section(left_column, "Track 2")
     
 
     def merge_tracks(entry_fade_out=None, entry_fade_in=None):
@@ -265,7 +397,7 @@ def run_merger(parent):
         except Exception as e:
             messagebox.showerror("Error", f"Failed to merge tracks: {e}", parent=merger_win)
 
-    sectionm = tk.LabelFrame(merger_win, text="Fading Settings", padx=10, pady=10)
+    sectionm = tk.LabelFrame(right_column, text="Merged Track", padx=10, pady=10)
     sectionm.pack(fill="x", padx=10, pady=5)
 
     # Row 1: Fade settings
@@ -301,10 +433,7 @@ def run_merger(parent):
         rowm4,
         text="▶ Play Merged",
         state="disabled",
-        command=lambda: (
-            on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged),
-            monitor_slider(merged_slider, global_audio_merged)
-        )
+        command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged, None, merged_slider)
     )
     btn_play_merged.pack(side=tk.LEFT)
     btn_stop_merged = tk.Button(rowm4, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged, btn_seg_merged))
@@ -321,7 +450,16 @@ def run_merger(parent):
     entry_seg_end.insert(0, "0")  
     entry_seg_end.pack(side=tk.LEFT)
 
-    btn_seg_merged = tk.Button(rowm4, text="▶ Play Merged Segment", state="disabled", command=lambda: on_play_click(get_segment(global_audio_merged, entry_seg_start, entry_seg_end), btn_seg_merged, btn_stop_merged))
+    btn_seg_merged = tk.Button(rowm4, text="▶ Play Merged Segment", state="disabled", command=lambda: play_segment_with_slider(
+        global_audio_merged, 
+        int(float(entry_seg_start.get() or 0) * 1000),
+        int(float(entry_seg_end.get() or len(global_audio_merged) / 1000) * 1000), 
+        btn_play_merged, 
+        btn_stop_merged, 
+        btn_seg_merged, 
+        merged_slider
+        )
+    )
     btn_seg_merged.pack(side=tk.LEFT)  
 
     # Slider for merged audio position
@@ -330,20 +468,23 @@ def run_merger(parent):
 
     def save_merged(parent_win):
         """Saves the merged audio to a user-selected file location."""
+        nonlocal global_audio_merged
+
         # Save the merged audio to a file
         if global_audio_merged:
             save_path = filedialog.asksaveasfilename(parent=parent_win, defaultextension=".mp3", filetypes=[("MP3 files", "*.mp3"), ("All files", "*.*")])
-            # Normalize the merged audio to prevent clipping
-            global_audio_merged = global_audio_merged.normalize()
+            
             if save_path:
                 try:
+                    # Normalize the merged audio to prevent clipping
+                    audio_to_save = global_audio_merged.normalize()
                     # force CBR and stereo + 44.1 kHz
-                    global_audio_merged.export( save_path, format="mp3", bitrate="192k", parameters=["-ac", "2", "-ar", "44100"] )
+                    audio_to_save.export( save_path, format="mp3", bitrate="192k", parameters=["-ac", "2", "-ar", "44100"] )
                     messagebox.showinfo("Saved", f"Merged audio saved to {save_path}", parent=parent_win)
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to save file: {e}", parent=parent_win)
 
     # Save button for merged audio
-    btn_save = tk.Button(merger_win, text="💾 Save Merged", state="disabled", command=lambda: save_merged(merger_win))
+    btn_save = tk.Button(right_column, text="💾 Save Merged", state="disabled", command=lambda: save_merged(merger_win))
     btn_save.pack(pady=5)
 

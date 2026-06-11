@@ -28,9 +28,21 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("SME - Simple Music Editor")
-        self.geometry("600x600")
+        # Set a minimum size for the window
+        self.minsize(400, 200)
+
+        # Make window responsive
+        self.rowconfigure(0, weight=1)
+        self.columnconfigure(0, weight=1)
+
+        # Create a container frame to hold the current view (menu, downloader, merger)
         self.container = tk.Frame(self)
         self.container.pack(fill="both", expand=True)
+
+        # Make the container responsive
+        self.container.rowconfigure(0, weight=1)
+        self.container.columnconfigure(0, weight=1)
+
         self.show_menu()
 
     def clear_container(self):
