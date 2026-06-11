@@ -430,7 +430,8 @@ def run_merger(parent):
             save_path = filedialog.asksaveasfilename(parent=parent_win, defaultextension=".mp3", filetypes=[("MP3 files", "*.mp3"), ("All files", "*.*")])
             
             if save_path:
-                try:
+
+                """try:
                     # Normalize the merged audio to prevent clipping
                     audio_to_save = global_audio_merged.normalize()
                     # force CBR and stereo + 44.1 kHz
@@ -438,6 +439,53 @@ def run_merger(parent):
                     messagebox.showinfo("Saved", f"Merged audio saved to {save_path}", parent=parent_win)
                     file_size = os.path.getsize(save_path) / (1024 * 1024)
                     label_info_saved.config(text=f"File saved to: {save_path} | Size: {file_size:.2f} MB", fg="green")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to save file: {e}", parent=parent_win)
+                    label_info_saved.config(text=f"Error saving file: {e}", fg="red")"""
+
+                try:
+                    import subprocess
+                    import io
+
+                    # Normalize the merged audio to prevent clipping
+                    audio_to_save = global_audio_merged.normalize()
+
+                    # Export WAV to RAM
+                    wav_buffer = io.BytesIO()
+                    global_audio_merged.export(wav_buffer, format="wav")
+                    wav_buffer.seek(0)
+
+                    # Run ffmpeg using WAV stdin → MP3 stdout
+                    ffmpeg_cmd = [
+                        AudioSegment.converter,  # ffmpeg.exe
+                        "-y",                    # overwrite output file if it exists   
+                        "-i", "pipe:0",          # input from stdin
+                        "-ac", "2",              # stereo
+                        "-ar", "44100",          # sample rate 44.1 kHz
+                        "-b:a", "192k",          # CBR bitrate 192 kbps 
+                        "-f", "mp3",             # output format
+                        "pipe:1"                 # output to stdout
+                    ]
+
+                    # Run ffmpeg as a subprocess
+                    process = subprocess.Popen(
+                        ffmpeg_cmd,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+
+                    # Write WAV data to ffmpeg's stdin and get MP3 data from stdout
+                    mp3_data, _ = process.communicate(wav_buffer.read())
+
+                    # Save MP3 to disk
+                    with open(save_path, "wb") as f:
+                        f.write(mp3_data)
+
+                    messagebox.showinfo("Saved", f"Merged audio saved to {save_path}", parent=parent_win)
+                    file_size = os.path.getsize(save_path) / (1024 * 1024)
+                    label_info_saved.config(text=f"File saved to: {save_path} | Size: {file_size:.2f} MB", fg="green")
+
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to save file: {e}", parent=parent_win)
                     label_info_saved.config(text=f"Error saving file: {e}", fg="red")
