@@ -97,32 +97,11 @@ class AudioPlayer:
 
 def run_merger(parent):
     """Sets up the audio merger GUI and functionality."""
-    # Set up the merger window
-    merger_win = parent
-
-    # Two main columns
-    left_column = tk.Frame(merger_win)
-    right_column = tk.Frame(merger_win)
-
-    left_column.pack(side="left", fill="both", expand=True)
-    right_column.pack(side="right", fill="both", expand=True)
-
-
-    player = AudioPlayer()
-    
-    # Helper function to extract segment with optional fade (not currently used, but can be used for the "Play Segment" button if we want to apply fade on the fly)
-    # def get_segment(audio_segment, start_entry, end_entry, fade_entry=None, apply_fade=False):
-    #     """Extracts a segment from the audio based on start/end times and applies fade if specified."""
-    #     start_ms = float(start_entry.get() or 0) * 1000
-    #     end_ms = float(end_entry.get()) * 1000 if end_entry.get() else len(audio_segment)
-    #    
-    #    segment = audio_segment[start_ms:end_ms]
-    #    
-    #    if apply_fade:
-    #        fade_ms = int(fade_entry.get() or 1000)
-    #        segment = segment.fade_in(fade_ms).fade_out(fade_ms)
-    #        
-    #    return segment
+    # This function is called from the main application to launch the merger window.
+    # It creates the GUI components and defines the logic for merging audio tracks, playing segments, and saving the merged result.
+    # The parent parameter is the main application window, which can be used for dialogs and as the master for the merger window.
+    # The merger window will be a child of the main application window, allowing for better integration and user experience.
+    # The function defines several helper functions for handling audio playback, merging logic, and GUI interactions, and then sets up the GUI layout for selecting audio files, defining segments, and controlling playback.
 
     def on_play_click(audio, btn_play,btn_stop, btn_seg=None, btn_fade=None, slider=None):
         """Plays the given audio segment and manages button states."""
@@ -169,8 +148,9 @@ def run_merger(parent):
         if player.is_playing():
             # position is in frames; convert to milliseconds
             pos_ms = int(player.position / player.samplerate * 1000)
-
-            slider.set(offset + pos_ms)
+            ms = offset + pos_ms
+            slider.set(ms)
+            slider.config(label=f"Position {format_time(ms)} - Position (ms):")
             merger_win.after(50, lambda: monitor_slider(slider, audio_segment, offset))  
 
     def monitor_slider_segment(slider, audio_segment, start_ms, end_ms, btn_play=None, btn_stop=None, btn_seg=None):
@@ -180,6 +160,7 @@ def run_merger(parent):
 
             # Update slider
             slider.set(pos_ms)
+            slider.config(label=f"Position {format_time(pos_ms)} - Position (ms):")
 
             # Stop exactly at the end
             if pos_ms >= end_ms:
@@ -220,20 +201,36 @@ def run_merger(parent):
         btn_stop.config(state="normal")
         btn_seg.config(state="disabled")
 
+        # Set up the merger window
 
-    global_audio_merged = None  # This will hold the merged audio object
-
-    def load_track_info(path, label_info):
+    def load_track_info(label_info, path=None, audio=None):
         """Calculates and displays audio info."""
         try:
-            audio = AudioSegment.from_file(path)
-            duration_sec = len(audio) / 1000
-            file_size = os.path.getsize(path) / (1024 * 1024)
-            label_info.config(text=f"Size: {file_size:.2f} MB | Duration: {duration_sec:.2f}s")
+            if audio is None:
+                audio = AudioSegment.from_file(path)
+            duration = len(audio) / 1000
+            duration_min = int(duration // 60)
+            duration_sec = duration % 60
+            if path:
+                file_size = os.path.getsize(path) / (1024 * 1024)
+                label_info.config(text=f"Size: {file_size:.2f} MB | Duration: {duration_min}:{duration_sec:02.0f}")
+            else:
+                label_info.config(text=f"Duration: {duration_min}:{duration_sec:02.0f}")
             return audio
         except Exception as e:
             label_info.config(text="Error loading file")
             return None
+
+    def get_time_seconds(entry_min, entry_sec):
+        minutes = int(entry_min.get() or 0)
+        seconds = int(entry_sec.get() or 0)
+        return (minutes * 60 + seconds)
+
+    def format_time(ms):
+        total_seconds = int(ms // 1000)
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        return f"{minutes:02d}m, {seconds:02d}s"
 
     def create_track_section(parent_win, label_text):
         """Creates a section in the GUI for selecting and controlling an audio track."""
@@ -246,7 +243,7 @@ def run_merger(parent):
         row1.pack(fill="x")
         entry = tk.Entry(row1, width=50)
         entry.pack(side=tk.LEFT, expand=True, fill="x")
-        btn_browse = tk.Button(row1, text="Browse", command=lambda: setup_browser(merger_win,entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info, slider))
+        btn_browse = tk.Button(row1, text="Browse", command=lambda: setup_browser(merger_win,entry, btn_play, btn_stop, btn_seg,  entry_start_min, entry_start_sec, entry_end_min, entry_end_sec, label_info, slider))
         btn_browse.pack(side=tk.LEFT)
 
         # Row 2: Info (Size/Duration)
@@ -260,15 +257,32 @@ def run_merger(parent):
         btn_seg = tk.Button(row3, text="▶ Segment", state="disabled")
         btn_stop = tk.Button(row3, text="■", state="disabled", command=lambda: on_stop_click(btn_play, btn_stop, btn_seg))
         
+        # Start/End time entries
+        tk.Label(row3, text="Start:").pack(side=tk.LEFT)
+        # start time entries
+        # Start time for segment in minutes
+        entry_start_min = tk.Entry(row3, width=3)
+        entry_start_min.insert(0, "0")
+        entry_start_min.pack(side=tk.LEFT)
+        tk.Label(row3, text="m").pack(side=tk.LEFT)
+        # Start time for segment in seconds
+        entry_start_sec = tk.Entry(row3, width=3)
+        entry_start_sec.insert(0, "0")
+        entry_start_sec.pack(side=tk.LEFT)
+        tk.Label(row3, text="s").pack(side=tk.LEFT)
 
-        tk.Label(row3, text="Start(s):").pack(side=tk.LEFT)
-        entry_start = tk.Entry(row3, width=5)
-        entry_start.insert(0, "0")
-        entry_start.pack(side=tk.LEFT)
-        tk.Label(row3, text="End(s):").pack(side=tk.LEFT)
-        entry_end = tk.Entry(row3, width=5)
-        entry_end.pack(side=tk.LEFT)
-        
+        # End time entries
+        # End time for segment in minutes
+        tk.Label(row3, text="End:").pack(side=tk.LEFT)
+        entry_end_min = tk.Entry(row3, width=3)
+        entry_end_min.insert(0, "0")
+        entry_end_min.pack(side=tk.LEFT)
+        tk.Label(row3, text="m").pack(side=tk.LEFT)
+        # End time for segment in seconds
+        entry_end_sec = tk.Entry(row3, width=3)
+        entry_end_sec.insert(0, "0")
+        entry_end_sec.pack(side=tk.LEFT)
+        tk.Label(row3, text="s").pack(side=tk.LEFT)
 
         btn_play.pack(side=tk.LEFT)
         btn_seg.pack(side=tk.LEFT)
@@ -281,21 +295,21 @@ def run_merger(parent):
             to=1000,  # temporary value, updated when audio loads
             orient="horizontal",
             length=400,
-            label="Position (ms)"
+            label="Position 0m, 0s - Position (ms):"
         )
         slider.pack(fill="x", pady=5)
         
-        return entry, btn_browse, btn_play, btn_stop, entry_start, entry_end, label_info, slider
+        return entry, btn_browse, btn_play, btn_stop, entry_start_min, entry_start_sec, entry_end_min, entry_end_sec, label_info, slider
 
-    def setup_browser(parent_win, entry, btn_play, btn_stop, btn_seg, entry_start, entry_end, label_info, slider):
+    def setup_browser(parent_win, entry, btn_play, btn_stop, btn_seg, entry_start_min, entry_start_sec, entry_end_min, entry_end_sec, label_info, slider):
         """Handles the file browsing and loading of audio info."""
         # Open file dialog and load audio info
         file = filedialog.askopenfilename(parent=parent_win, filetypes=[("Audio files", "*.mp3 *.wav"), ("All files", "*.*")], title="Select an audio file")
         if file:
             entry.delete(0, tk.END)
             entry.insert(0, file)
-            audio = load_track_info(file, label_info)
-            
+            audio = load_track_info(label_info, file)
+
             if audio:
                 # Update slider range based on audio duration
                 slider.config(to=len(audio))
@@ -311,27 +325,24 @@ def run_merger(parent):
                 # btn_seg.config(state="normal", command=lambda: on_play_click(get_segment(audio, entry_start, entry_end, False), btn_play, btn_stop, btn_seg, None, slider))
                 btn_seg.config(
                     state="normal",
-                    command=lambda: play_segment_with_slider(
-                        audio,
-                        int(float(entry_start.get() or 0) * 1000),
-                        int(float(entry_end.get() or len(audio)/1000) * 1000),
-                        btn_play,
-                        btn_stop,
-                        btn_seg,
-                        slider
+                    command=lambda: (
+                        print("Start:", get_time_seconds(entry_start_min, entry_start_sec)),
+                        print("End:", get_time_seconds(entry_end_min, entry_end_sec)),
+                        play_segment_with_slider(
+                            audio,
+                            int(get_time_seconds(entry_start_min, entry_start_sec) * 1000),
+                            int(get_time_seconds(entry_end_min, entry_end_sec) * 1000),
+                            btn_play,
+                            btn_stop,
+                            btn_seg,
+                            slider
+                        )
                     )
                 )
 
                 # Stop 
                 btn_stop.config(state="normal")
-                
-
-
-    # Create sections
-    e1, b1, p1, s1, st1, en1, inf1, slider1= create_track_section(left_column, "Track 1")
-    e2, b2, p2, s2, st2, en2, inf2, slider2 = create_track_section(left_column, "Track 2")
     
-
     def merge_tracks(entry_fade_out=None, entry_fade_in=None):
         """Merges the selected audio tracks based on user-defined start/end times."""
         # Merge the selected audio tracks
@@ -339,18 +350,28 @@ def run_merger(parent):
         tipo = combo_transition.get()
 
         try:
-            audio1 = AudioSegment.from_file(e1.get())
-            audio2 = AudioSegment.from_file(e2.get())
+            audio1 = AudioSegment.from_file(entry1.get())
+            audio2 = AudioSegment.from_file(entry2.get())
             # Ensure both audio segments have the same frame rate and channels for proper merging
             audio1 = audio1.set_frame_rate(44100).set_channels(2)
             audio2 = audio2.set_frame_rate(44100).set_channels(2)
 
             
             # Get start/end times
-            start1 = float(st1.get()) * 1000 if st1.get() else 0
-            end1 = float(en1.get()) * 1000 if en1.get() else len(audio1)
-            start2 = float(st2.get()) * 1000 if st2.get() else 0
-            end2 = float(en2.get()) * 1000 if en2.get() else len(audio2)
+            st1 = get_time_seconds(entry_start_min1, entry_start_sec1)
+            st2 = get_time_seconds(entry_start_min2, entry_start_sec2)
+            en1 = get_time_seconds(entry_end_min1, entry_end_sec1)
+            en2 = get_time_seconds(entry_end_min2, entry_end_sec2)
+
+            start1 = float(st1) * 1000 if st1 else 0
+            end1 = float(en1) * 1000 if en1 else len(audio1)
+            start2 = float(st2) * 1000 if st2 else 0
+            end2 = float(en2) * 1000 if en2 else len(audio2)
+
+            print("Track 1 start:", start1)
+            print("Track 1 end:", end1)
+            print("Track 2 start:", start2)
+            print("Track 2 end:", end2)
             
             # Extract segments
             seg1 = audio1[start1:end1]
@@ -382,6 +403,9 @@ def run_merger(parent):
                     # Concatenate: End of seg1 + Transition Sound + Start of seg2
                     global_audio_merged = seg1_fade + sound_transition + seg2_fade
             
+            # Display merged track info
+            load_track_info(label_info_merged, None, global_audio_merged)
+
             # Update merged slider range
             merged_slider.config(to=len(global_audio_merged))
             merged_slider.set(0)
@@ -396,75 +420,6 @@ def run_merger(parent):
             messagebox.showinfo("Success", "Tracks merged successfully!", parent=merger_win)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to merge tracks: {e}", parent=merger_win)
-
-    sectionm = tk.LabelFrame(right_column, text="Merged Track", padx=10, pady=10)
-    sectionm.pack(fill="x", padx=10, pady=5)
-
-    # Row 1: Fade settings
-    rowm1 = tk.Frame(sectionm)
-    rowm1.pack(fill="x")
-
-    tk.Label(rowm1, text="Fade Out(ms):").pack(side=tk.LEFT)
-    entry_fade_out = tk.Entry(rowm1, width=5)
-    entry_fade_out.insert(0, "2000") # default fade duration  
-    entry_fade_out.pack(side=tk.LEFT)
-    tk.Label(rowm1, text="Fade In(ms):").pack(side=tk.LEFT)
-    entry_fade_in = tk.Entry(rowm1, width=5)
-    entry_fade_in.insert(0, "2000") # default fade duration  
-    entry_fade_in.pack(side=tk.LEFT)
-
-    # Row 2: Info
-    label_info = tk.Label(sectionm, text="Crossfade will happen using fade from 'Fade In'", fg="red")
-    label_info.pack(fill="x", pady=5)
-
-    # Row 3: Transition type
-    tk.Label(sectionm, text="Transition Type:").pack(pady=5)
-    combo_transition = ttk.Combobox(sectionm, values=["Crossfade", "Fade Out/In", "Insert Sound (Transition)"], state="readonly")
-    combo_transition.current(0) 
-    combo_transition.pack(pady=5)
-
-    # Row 4: Controls
-    # Set up browse buttons
-    rowm4 = tk.Frame(sectionm)
-    rowm4.pack(fill="x")
-    tk.Button(rowm4, text="Merge Tracks", command=lambda: merge_tracks(entry_fade_out=entry_fade_out, entry_fade_in=entry_fade_in)).pack(pady=10)
-
-    btn_play_merged = tk.Button(
-        rowm4,
-        text="▶ Play Merged",
-        state="disabled",
-        command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged, None, merged_slider)
-    )
-    btn_play_merged.pack(side=tk.LEFT)
-    btn_stop_merged = tk.Button(rowm4, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged, btn_seg_merged))
-    btn_stop_merged.pack(side=tk.LEFT)
-
-    # Segment preview controls for merged audio
-    tk.Label(rowm4, text="Segment Start(ms):").pack(side=tk.LEFT)
-    entry_seg_start = tk.Entry(rowm4, width=5)
-    entry_seg_start.insert(0, "0")  
-    entry_seg_start.pack(side=tk.LEFT)
-
-    tk.Label(rowm4, text="Segment End(ms):").pack(side=tk.LEFT)
-    entry_seg_end = tk.Entry(rowm4, width=5)
-    entry_seg_end.insert(0, "0")  
-    entry_seg_end.pack(side=tk.LEFT)
-
-    btn_seg_merged = tk.Button(rowm4, text="▶ Play Merged Segment", state="disabled", command=lambda: play_segment_with_slider(
-        global_audio_merged, 
-        int(float(entry_seg_start.get() or 0) * 1000),
-        int(float(entry_seg_end.get() or len(global_audio_merged) / 1000) * 1000), 
-        btn_play_merged, 
-        btn_stop_merged, 
-        btn_seg_merged, 
-        merged_slider
-        )
-    )
-    btn_seg_merged.pack(side=tk.LEFT)  
-
-    # Slider for merged audio position
-    merged_slider = tk.Scale(sectionm, from_=0, to=1000, orient="horizontal", length=500, label="Merged Audio Position (ms)")
-    merged_slider.pack(fill="x", pady=5)
 
     def save_merged(parent_win):
         """Saves the merged audio to a user-selected file location."""
@@ -481,10 +436,153 @@ def run_merger(parent):
                     # force CBR and stereo + 44.1 kHz
                     audio_to_save.export( save_path, format="mp3", bitrate="192k", parameters=["-ac", "2", "-ar", "44100"] )
                     messagebox.showinfo("Saved", f"Merged audio saved to {save_path}", parent=parent_win)
+                    file_size = os.path.getsize(save_path) / (1024 * 1024)
+                    label_info_saved.config(text=f"File saved to: {save_path} | Size: {file_size:.2f} MB", fg="green")
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to save file: {e}", parent=parent_win)
+                    label_info_saved.config(text=f"Error saving file: {e}", fg="red")
 
+    # Main merger logic and GUI setup starts here
+    # Set up the merger window
+    merger_win = parent
+
+    # Two main columns
+    # track selection
+    left_column = tk.Frame(merger_win)
+    left_column.pack(side="left", fill="both", expand=True)
+    # merged track and settings
+    right_column = tk.Frame(merger_win)
+    right_column.pack(side="right", fill="both", expand=True)
+
+    # init audio player
+    player = AudioPlayer()
+
+    # init global merged audio variable, This will hold the merged audio object
+    global_audio_merged = None 
+
+    # Create sections for both tracks
+    entry1, btn_browse1, btn_play1, btn_stop1, entry_start_min1, entry_start_sec1, entry_end_min1, entry_end_sec1, inf1, slider1= create_track_section(left_column, "Track 1")
+    entry2, btn_browse2, btn_play2, btn_stop2, entry_start_min2, entry_start_sec2, entry_end_min2, entry_end_sec2, inf2, slider2 = create_track_section(left_column, "Track 2")
+
+    ## Merged Track Section (Right side)
+    sectionm = tk.LabelFrame(right_column, text="Merged Track", padx=10, pady=10)
+    sectionm.pack(fill="x", padx=10, pady=5)
+
+    ### Merge Settings (first line of the merged track section (right side))
+    # Settings for merging (fade durations, transition type) in the left column of the merged track section
+    row_settings = tk.Frame(sectionm)
+    row_settings.pack(fill="x", pady=5)
+
+    #### Split the merge settings into two columns: left for settings, right for info about the merge
+    # left column of first line of merged track section (right side)
+    left_column_merge_settings = tk.Frame(row_settings)
+    left_column_merge_settings.pack(side="left", fill="both", expand=True)
+    # right column of first line of merged track section (right side)
+    right_column_merge_settings = tk.Frame(row_settings)
+    right_column_merge_settings.pack(side="right", fill="both", expand=True)
+
+    ##### first line of left column of the first line of the merged track section (right side) for fade settings
+    # Row 1: Fade settings
+    rowms1 = tk.Frame(left_column_merge_settings)
+    rowms1.pack(fill="x")
+
+    tk.Label(rowms1, text="Fade Out(ms):").pack(side=tk.LEFT)
+    entry_fade_out = tk.Entry(rowms1, width=5)
+    entry_fade_out.insert(0, "2000") # default fade duration  
+    entry_fade_out.pack(side=tk.LEFT)
+    tk.Label(rowms1, text="Fade In(ms):").pack(side=tk.LEFT)
+    entry_fade_in = tk.Entry(rowms1, width=5)
+    entry_fade_in.insert(0, "2000") # default fade duration  
+    entry_fade_in.pack(side=tk.LEFT)
+
+    ##### second line of left column of the first line of the merged track section (right side) for transition type selection
+    # Row 2: Transition type
+    rowms2 = tk.Frame(left_column_merge_settings)
+    rowms2.pack(fill="x")
+    # Transition type selection
+    tk.Label(rowms2, text="Transition Type:").pack(pady=5, side=tk.LEFT)
+    combo_transition = ttk.Combobox(rowms2, values=["Crossfade", "Fade Out/In", "Insert Sound (Transition)"], state="readonly")
+    combo_transition.current(0) 
+    combo_transition.pack(pady=5, side=tk.LEFT)
+
+    ##### third line of left column of the first line of the merged track section (right side) for the merge button
+    # Row 3: Merge button
+    rowms3 = tk.Frame(left_column_merge_settings)
+    rowms3.pack(fill="x")
+    tk.Button(rowms3, text="Merge Tracks", command=lambda: merge_tracks(entry_fade_out=entry_fade_out, entry_fade_in=entry_fade_in)).pack(pady=10, side=tk.RIGHT)
+
+    #### Info in right column of the first line of the merged track section (right side) about the merge settings
+    # Info in right column about the merge settings
+    label_info = tk.Label(right_column_merge_settings, text="Crossfade will happen using fade from 'Fade In'", fg="red")
+    label_info.pack(fill="x", pady=5)
+
+    ### second line of the merged track section (right side) for playback controls and info about the merged audio
+    # Row 2 of right column: Info (Size/Duration)
+    rowm_buttons = tk.Frame(sectionm)
+    rowm_buttons.pack(fill="x")
+    label_info_merged = tk.Label(rowm_buttons, text="Merge files to see details...", fg="blue")
+    label_info_merged.pack(fill="x", pady=5)
+
+    # Set up browse buttons
+    # Play button for merged audio
+    btn_play_merged = tk.Button(
+        rowm_buttons,
+        text="▶ Play Merged",
+        state="disabled",
+        command=lambda: on_play_click(global_audio_merged, btn_play_merged, btn_stop_merged, btn_seg_merged, None, merged_slider)
+    )
+    btn_play_merged.pack(side=tk.LEFT)
+    # Stop button for merged audio
+    btn_stop_merged = tk.Button(rowm_buttons, text="■ Stop", state="disabled", command=lambda: on_stop_click(btn_play_merged, btn_stop_merged, btn_seg_merged))
+    btn_stop_merged.pack(side=tk.LEFT)
+
+    # Segment preview controls for merged audio
+    tk.Label(rowm_buttons, text="Segment Start:").pack(side=tk.LEFT)
+    entry_seg_start_m = tk.Entry(rowm_buttons, width=3)
+    entry_seg_start_m.insert(0, "0")  
+    entry_seg_start_m.pack(side=tk.LEFT)  
+    tk.Label(rowm_buttons, text="m").pack(side=tk.LEFT)  
+    entry_seg_start_s = tk.Entry(rowm_buttons, width=3)
+    entry_seg_start_s.insert(0, "0")  
+    entry_seg_start_s.pack(side=tk.LEFT)
+    tk.Label(rowm_buttons, text="s").pack(side=tk.LEFT)
+
+    tk.Label(rowm_buttons, text="Segment End:").pack(side=tk.LEFT)
+    entry_seg_end_m = tk.Entry(rowm_buttons, width=3)
+    entry_seg_end_m.insert(0, "0")  
+    entry_seg_end_m.pack(side=tk.LEFT)
+    tk.Label(rowm_buttons, text="m").pack(side=tk.LEFT)
+    entry_seg_end_s = tk.Entry(rowm_buttons, width=3)
+    entry_seg_end_s.insert(0, "0")  
+    entry_seg_end_s.pack(side=tk.LEFT)
+    tk.Label(rowm_buttons, text="s").pack(side=tk.LEFT)
+
+    # Button to play the defined segment of the merged audio
+    btn_seg_merged = tk.Button(rowm_buttons, text="▶ Play Merged Segment", state="disabled", command=lambda: play_segment_with_slider(
+        global_audio_merged, 
+        int(get_time_seconds(entry_seg_start_m, entry_seg_start_s) * 1000),
+        int(get_time_seconds(entry_seg_end_m, entry_seg_end_s) * 1000), 
+        btn_play_merged, 
+        btn_stop_merged, 
+        btn_seg_merged, 
+        merged_slider
+        )
+    )
+    btn_seg_merged.pack(side=tk.LEFT)  
+
+    ### Third line of the merged track section (right side) for the slider to seek through the merged audio
+    rowm_slider = tk.Frame(sectionm)
+    rowm_slider.pack(fill="x", pady=5)
+    # Slider for merged audio position
+    merged_slider = tk.Scale(rowm_slider, from_=0, to=1000, orient="horizontal", length=500, label="Merged Audio Position: 0m, 0s - Position (ms):")
+    merged_slider.pack(fill="x", pady=5)
+
+    ## Second secction in the right column for saving the merged audio
     # Save button for merged audio
     btn_save = tk.Button(right_column, text="💾 Save Merged", state="disabled", command=lambda: save_merged(merger_win))
     btn_save.pack(pady=5)
+
+    # Info label for save status
+    label_info_saved = tk.Label(right_column, text="Click Save Merged to save the combined audio", fg="blue")
+    label_info_saved.pack(fill="x", pady=5)
 
