@@ -58,6 +58,7 @@ class App(tk.Tk):
         tk.Button(self.container, text="Exit", command=self.quit).pack(pady=5)
 
     def open_downloader(self):
+        self.clear_container()
         # Back button to return to the main menu
         tk.Button(self.container, text="← Back to Menu", command=self.show_menu).pack(anchor="nw", padx=10, pady=5)
         # Pass the container to run_downloader to draw within it

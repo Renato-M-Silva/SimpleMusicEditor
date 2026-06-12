@@ -1,8 +1,10 @@
+from tkinter import ttk
 import yt_dlp
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 import os
 from threading import Thread
+import subprocess
 
 # --- Backend Logic (Download Logger) ---
 
@@ -78,23 +80,82 @@ def download_audio_logic(url, output_path, text_widget, parent_win):
     except Exception as e:
         messagebox.showerror("Error", f"Failed to download audio: {e}", parent=parent_win)
 
+def extract_audio_from_video(video_path, output_path, text_widget, parent_win):
+    """Extracts audio from a local video file using ffmpeg."""
+    try:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+        ffmpeg_path = os.path.join(base_path, "ffmpeg")
+
+        output_file = os.path.join(output_path, os.path.splitext(os.path.basename(video_path))[0] + ".mp3")
+
+        cmd = [
+            os.path.join(ffmpeg_path, "ffmpeg.exe"),
+            "-i", video_path,
+            "-vn",
+            "-ac", "2",
+            "-ar", "44100",
+            "-b:a", "192k",
+            output_file
+        ]
+
+        text_widget.insert(tk.END, "Extracting audio...\n")
+        text_widget.update_idletasks()
+
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        messagebox.showinfo("Success", f"Audio extracted to:\n{output_file}", parent=parent_win)
+
+    except Exception as e:
+        messagebox.showerror("Error", f"Failed to extract audio: {e}", parent=parent_win)
+
+
 # --- GUI Component ---
 
 def run_downloader(parent):
     """Launches the downloader window as a child of parent."""
     download_win = parent
 
-    tk.Label(download_win, text="YouTube URL:").pack(pady=5)
-    url_entry = tk.Entry(download_win, width=60)
-    url_entry.pack(pady=5)
+    tk.Label(download_win, text="Select Source Type:").pack(pady=5)
+
+    source_type = ttk.Combobox(download_win, values=["YouTube URL", "Local Video File"], state="readonly")
+    source_type.current(0)
+    source_type.pack(pady=5)
+
+    tk.Label(download_win, text="Input:").pack(pady=5)
+    input_entry = tk.Entry(download_win, width=60)
+    input_entry.pack(pady=5)
+
 
     def start_process():
-        url = url_entry.get()
-        # PASS 'parent=download_win' here to keep focus!
-        path = filedialog.askdirectory(parent=download_win)
-        if url and path:
-            Thread(target=download_audio_logic, args=(url, path, progress_text, download_win), daemon=True).start()
+        mode = source_type.get()
+        user_input = input_entry.get()
 
-    tk.Button(download_win, text="Download", command=start_process).pack(pady=10)
+        path = filedialog.askdirectory(parent=download_win)
+        if path:
+            if mode == "YouTube URL":
+                if user_input:
+                    Thread(
+                        target=download_audio_logic,
+                        args=(user_input, path, progress_text, download_win),
+                        daemon=True
+                    ).start()
+                else:
+                    messagebox.showerror("Error", "Please enter a YouTube URL.", parent=download_win)
+                    return
+
+            elif mode == "Local Video File":
+                video_file = filedialog.askopenfilename(
+                    parent=download_win,
+                    filetypes=[("Video files", "*.mp4 *.mkv *.avi *.mov"), ("All files", "*.*")]
+                )
+
+                if video_file:
+                    Thread(
+                        target=extract_audio_from_video,
+                        args=(video_file, path, progress_text, download_win),
+                        daemon=True
+                    ).start()
+
+    tk.Button(download_win, text="Start Process", command=start_process).pack(pady=10)
     progress_text = scrolledtext.ScrolledText(download_win, width=70, height=15)
     progress_text.pack(pady=5)
