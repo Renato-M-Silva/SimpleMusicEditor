@@ -222,8 +222,8 @@ def run_merger(parent):
             return None
 
     def get_time_seconds(entry_min, entry_sec):
-        minutes = int(entry_min.get() or 0)
-        seconds = int(entry_sec.get() or 0)
+        minutes = float(entry_min.get() or 0)
+        seconds = float(entry_sec.get() or 0)
         return (minutes * 60 + seconds)
 
     def format_time(ms):
@@ -326,8 +326,8 @@ def run_merger(parent):
                 btn_seg.config(
                     state="normal",
                     command=lambda: (
-                        print("Start:", get_time_seconds(entry_start_min, entry_start_sec)),
-                        print("End:", get_time_seconds(entry_end_min, entry_end_sec)),
+                        print(f"Start: {entry_start_min}:{entry_start_sec} | Total of {get_time_seconds(entry_start_min, entry_start_sec)} seconds, and {get_time_seconds(entry_start_min, entry_start_sec) * 1000} ms"),
+                        print(f"End: {entry_end_min}:{entry_end_sec} | Total of {get_time_seconds(entry_end_min, entry_end_sec)} seconds, and {get_time_seconds(entry_end_min, entry_end_sec) * 1000} ms"),
                         play_segment_with_slider(
                             audio,
                             int(get_time_seconds(entry_start_min, entry_start_sec) * 1000),
@@ -368,11 +368,11 @@ def run_merger(parent):
             start2 = float(st2) * 1000 if st2 else 0
             end2 = float(en2) * 1000 if en2 else len(audio2)
 
-            print("Track 1 start:", start1)
-            print("Track 1 end:", end1)
-            print("Track 2 start:", start2)
-            print("Track 2 end:", end2)
-            
+            print(f"Track 1 start: {entry_start_min1}:{entry_start_sec1} | Total of {st1} seconds, and {start1} ms")
+            print(f"Track 1 end: {entry_end_min1}:{entry_end_sec1} | Total of {en1} seconds, and {end1} ms")
+            print(f"Track 2 start: {entry_start_min2}:{entry_start_sec2} | Total of {st2} seconds, and {start2} ms")
+            print(f"Track 2 end: {entry_end_min2}:{entry_end_sec2} | Total of {en2} seconds, and {end2} ms")
+
             # Extract segments
             seg1 = audio1[start1:end1]
             seg2 = audio2[start2:end2]
